@@ -30,5 +30,15 @@ return [
         'secret' => env('AWS_SECRET_ACCESS_KEY'),
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
+    'cognito' => [
+        'key' => env('AWS_ACCESS_KEY_ID'),
+        'secret' => env('AWS_SECRET_ACCESS_KEY'),
+        'region' => env('AWS_COGNITO_REGION', 'us-east-1'),
+        'client_id' => env('AWS_COGNITO_CLIENT_ID', '4tsfflr0b91eu2tg20kje683oq'),
+        // 'client_secret' => env('AWS_COGNITO_CLIENT_SECRET', 'your-client-secret'),
+        'user_pool_id' => env('AWS_COGNITO_USER_POOL_ID', 'us-east-1_0WWDXNbb5'),
+        'app_client_id' => env('AWS_COGNITO_APP_CLIENT_ID', '4tsfflr0b91eu2tg20kje683oq'),
+        // 'app_client_secret' => env('AWS_COGNITO_APP_CLIENT_SECRET', 'your-app-client-secret'),
+    ],
 
 ];
