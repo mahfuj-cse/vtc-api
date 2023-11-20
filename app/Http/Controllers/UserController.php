@@ -49,8 +49,20 @@ class UserController extends Controller
                     // Add any other attributes as needed
                 ],
             ]);
+            // If signUp is successful, confirm the user
+            // $this->cognito->adminConfirmSignUp([
+            //     'ClientId' => config('services.cognito.client_id'),
+            //     'Username' => $username,
+            //     'UserPoolId' => config('services.cognito.user_pool_id'),
+            // ]);
+            // Create a local user record
+            $user = User::create([
+                'name' => $name,
+                'email' => $username,
+                'password' => bcrypt($password), // Assuming you're using the default Laravel User model and its password hashing
+            ]);
 
-            return response()->json(['message' => 'User registered successfully.']);
+            return response()->json(['message' => 'User registered successfully.', 'user' => $user]);
         } catch (AwsException $e) {
             return response()->json(['message' => $e->getAwsErrorMessage()], 400);
         }
@@ -71,11 +83,19 @@ class UserController extends Controller
                 ],
             ]);
 
-            // Get the tokens from the result and handle accordingly (e.g., store in session)
+            // Get the tokens from the result
             $accessToken = $result->get('AuthenticationResult')['AccessToken'];
             $idToken = $result->get('AuthenticationResult')['IdToken'];
 
-            return response()->json(['access_token' => $accessToken, 'id_token' => $idToken]);
+            // Retrieve the user from your local user table
+            $user = User::where('email', $username)->first();
+
+            return response()->json([
+                'message' => 'Login successful.',
+                'access_token' => $accessToken,
+                'id_token' => $idToken,
+                'user' => $user,
+            ]);
         } catch (AwsException $e) {
             return response()->json(['message' => $e->getAwsErrorMessage()], 401);
         }
