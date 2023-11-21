@@ -64,7 +64,7 @@ class LoginController extends Controller
                 'name' => $name,
                 'email' => $username,
                 'cognitoId' => $result["UserSub"],
-                'role' => 'admin',
+                // 'role' => 'admin',
                 'password' => bcrypt($password), // Assuming you're using the default Laravel User model and its password hashing
             ]);
 

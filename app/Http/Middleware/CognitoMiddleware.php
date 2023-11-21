@@ -19,7 +19,7 @@ class CognitoMiddleware
         if (isset($tokenDetails->username)) {
             $getUser = User::query()->where('cognitoId', $tokenDetails->username)->first();
 
-            if ($getUser) {
+            if ($getUser && $getUser->isAdmin()) {
                 return $next($request);
             }
             return response()->json(['message' => 'Unauthorized. Cognito authentication required.'], 401);
