@@ -8,102 +8,77 @@ use Illuminate\Support\Facades\Auth;
 use Aws\CognitoIdentityProvider\CognitoIdentityProviderClient;
 use Aws\CognitoIdentityProvider\Exception\CognitoIdentityProviderException;
 use Aws\Exception\AwsException;
+use Illuminate\Auth\Events\Registered;
+use Illuminate\Validation\ValidationException;
+use App\Http\Controllers\Validators\Validator;
+use Illuminate\Support\Facades\Validator as FacadesValidator;
+use App\Cognito\CognitoClient;
+use Illuminate\Http\JsonResponse;
 
 class LoginController extends Controller
 {
-    private $cognito;
-
-    public function __construct()
-    {
-        $this->cognito = new CognitoIdentityProviderClient([
-            'version' => 'latest',
-            'region' => config('services.cognito.region'),
-            'credentials' => [
-                'key' => config('services.cognito.key'),
-                'secret' => config('services.cognito.secret'),
-            ],
-        ]);
-    }
-
-
-    public function register(Request $request)
-    {
-        $this->validate($request, [
-            'name' => 'required',
-            'email' => 'required|email',
-            'password' => 'required|min:8',
-        ]);
-
-        $username = $request->input('email');
-        $password = $request->input('password');
-        $name = $request->input('name');
-
-        try {
-            $result = $this->cognito->signUp([
-                'ClientId' => config('services.cognito.client_id'),
-                'Username' => $username,
-                'Password' => $password,
-                'UserAttributes' => [
-                    ['Name' => 'email', 'Value' => $username],
-                    ['Name' => 'name', 'Value' => $name],
-                    // Add any other attributes as needed
-                ],
-            ]);
-
-
-            // If signUp is successful, confirm the user
-            // $this->cognito->adminConfirmSignUp([
-            //     'ClientId' => config('services.cognito.client_id'),
-            //     'Username' => $username,
-            //     'UserPoolId' => config('services.cognito.user_pool_id'),
-            // ]);
-
-
-            // Create a local user record
-            $user = User::create([
-                'name' => $name,
-                'email' => $username,
-                'cognitoId' => $result["UserSub"],
-                // 'role' => 'admin',
-                'password' => bcrypt($password), // Assuming you're using the default Laravel User model and its password hashing
-            ]);
-
-            return response()->json(['message' => 'User registered successfully.', 'user' => $user]);
-        } catch (AwsException $e) {
-            return response()->json(['message' => $e->getAwsErrorMessage()], 400);
-        }
-    }
 
     public function login(Request $request)
     {
-        $username = $request->input('email');
-        $password = $request->input('password');
-
         try {
-            $result = $this->cognito->initiateAuth([
-                'AuthFlow' => 'USER_PASSWORD_AUTH',
-                'ClientId' => config('services.cognito.client_id'),
-                'AuthParameters' => [
-                    'USERNAME' => $username,
-                    'PASSWORD' => $password,
-                ],
+            $request->validate([
+                'email' => 'required|string|email',
+                'password' => 'required|string',
             ]);
 
-            // Get the tokens from the result
-            $accessToken = $result->get('AuthenticationResult')['AccessToken'];
-            $idToken = $result->get('AuthenticationResult')['IdToken'];
+            $email = $request->input('email');
+            $password = $request->input('password');
 
-            // Retrieve the user from your local user table
-            $user = User::where('email', $username)->first();
-
-            return response()->json([
-                'message' => 'Login successful.',
-                'access_token' => $accessToken,
-                'id_token' => $idToken,
-                'user' => $user,
-            ]);
-        } catch (AwsException $e) {
-            return response()->json(['message' => $e->getAwsErrorMessage()], 401);
+            // Use the CognitoClient to attempt authentication
+            $result = app()->make(CognitoClient::class)->login($email, $password);
+dd($result);
+            if ($result) {
+                // Authentication successful
+                return response()->json(['message' => 'Login successful'], 200);
+            } else {
+                // Authentication failed
+                throw ValidationException::withMessages(['email' => 'Invalid credentials']);
+            }
+        } catch (\Exception $e) {
+            // Handle exceptions
+            return response()->json(['error' => $e->getMessage()], 401);
         }
+    }
+    public function register(Request $request)
+    {
+        try {
+            $request->validate([
+                'name' => 'required|string|max:255',
+                'email' => 'required|string|email|max:255|unique:users',
+                'password' => 'required|string|min:8|confirmed',
+            ]);
+
+            $attributes = [];
+
+            $userFields = ['name', 'email'];
+
+            foreach ($userFields as $userField) {
+                if ($request->$userField === null) {
+                    throw new \Exception("The configured user field $userField is not provided in the request.");
+                }
+                $attributes[$userField] = $request->$userField;
+            }
+
+            app()->make(CognitoClient::class)->register($request->email, $request->password, $attributes);
+
+            event(new Registered($user = $this->create($request->all())));
+
+            return response()->json(['message' => 'Registration successful'], 201);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 400);
+        }
+    }
+    protected function create(array $data)
+    {
+        return User::create([
+            'name' => $data['name'],
+            'email' => $data['email'],
+            'password' => bcrypt($data['password']),
+        ]);
     }
 }
