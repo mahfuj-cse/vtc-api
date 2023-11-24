@@ -142,7 +142,7 @@ class CognitoClient
                 'AuthParameters' => [
                     'USERNAME'     => $email,
                     'PASSWORD'     => $password,
-                    // 'SECRET_HASH'  => $this->cognitoSecretHash($email)
+                    'SECRET_HASH'  => $this->cognitoSecretHash($email)
                 ],
                 'ClientId'   => $this->clientId,
                 'UserPoolId' => $this->poolId

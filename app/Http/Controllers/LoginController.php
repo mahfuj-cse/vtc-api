@@ -31,7 +31,6 @@ class LoginController extends Controller
 
             // Use the CognitoClient to attempt authentication
             $result = app()->make(CognitoClient::class)->login($email, $password);
-dd($result);
             if ($result) {
                 // Authentication successful
                 return response()->json(['message' => 'Login successful'], 200);
