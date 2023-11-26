@@ -29,6 +29,9 @@ Route::middleware([CognitoMiddleware::class])->group(function () {
 });
 
 
+Route::middleware('auth:cognito')->get('/cognito', function () {
+    return 'This route is protected by the Cognito guard.';
+});
 
 Route::post('/users', [UserController::class, 'store']);
 Route::put('/users/{user}', [UserController::class, 'update']);

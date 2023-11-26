@@ -2,6 +2,8 @@
 
 namespace App\Cognito;
 
+use App\Http\Requests\Request;
+use App\Models\User;
 use Aws\CognitoIdentityProvider\CognitoIdentityProviderClient;
 use Aws\CognitoIdentityProvider\Exception\CognitoIdentityProviderException;
 use Illuminate\Support\Facades\Password;
@@ -92,6 +94,25 @@ class CognitoClient
         return $response;
     }
 
+
+      public function initiateAuth($authFlow, $username, $password)
+    {
+        try {
+            $result = $this->client->initiateAuth([
+                'AuthFlow' => $authFlow,
+                'ClientId' => $this->clientId,
+                'AuthParameters' => [
+                    'USERNAME' => $username,
+                    'PASSWORD' => $password,
+                ],
+            ]);
+
+            return $result;
+        } catch (CognitoIdentityProviderException $exception) {
+            return false;
+        }
+    }
+
     /**
      * Registers a user in the given user pool
      *
@@ -120,7 +141,7 @@ class CognitoClient
             throw $e;
         }
 
-        $this->setUserAttributes($email, ['email_verified' => 'true']);
+        // $this->setUserAttributes($email, ['email_verified' => 'true']);
 
         return (bool) $response['UserConfirmed'];
     }
@@ -133,7 +154,7 @@ class CognitoClient
      * @return bool
      * @throws CognitoIdentityProviderException
      */
-    public function login($email, $password)
+    public function loginAdmin($email, $password)
     {
 
         try {
@@ -149,6 +170,41 @@ class CognitoClient
             ]);
             return $response;
         } catch (CognitoIdentityProviderException $exception) {
+            return false;
+        }
+    }
+
+
+
+    public function login(Request $request)
+    {
+        $email = $request->input('email');
+        $password = $request->input('password');
+
+        try {
+            $result = $this->client->initiateAuth([
+                'AuthFlow' => 'USER_PASSWORD_AUTH',
+                'ClientId' => config('services.cognito.client_id'),
+                'AuthParameters' => [
+                    'USERNAME' => $email,
+                    'PASSWORD' => $password,
+                ],
+            ]);
+
+            // Get the tokens from the result
+            $accessToken = $result->get('AuthenticationResult')['AccessToken'];
+            $idToken = $result->get('AuthenticationResult')['IdToken'];
+
+            // Retrieve the user from your local user table
+            $user = User::where('email', $email)->first();
+
+            return [
+                'message' => 'Login successful.',
+                'access_token' => $accessToken,
+                'id_token' => $idToken,
+                'user' => $user,
+            ];
+        } catch (CognitoIdentityProviderException $e) {
             return false;
         }
     }

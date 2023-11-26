@@ -41,8 +41,12 @@ return [
             'provider' => 'users',
         ],
         'api' => [
-            'driver' => 'token',
+            'driver' => 'cognito',
             'provider' => 'users',
+        ],
+        'cognito' => [
+            'driver' => 'cognito', // Use the 'cognito' driver
+            'provider' => 'users', // Specify the provider for Cognito
         ],
     ],
 

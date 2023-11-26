@@ -18,7 +18,46 @@ use Illuminate\Http\JsonResponse;
 class LoginController extends Controller
 {
 
+    protected $cognito;
+
+    public function __construct(CognitoClient $cognito)
+    {
+        $this->cognito = $cognito;
+    }
+
     public function login(Request $request)
+    {
+        $username = $request->input('email');
+        $password = $request->input('password');
+
+        try {
+            // Use the new method to initiate authentication with USER_PASSWORD_AUTH flow.
+            $result = $this->cognito->initiateAuth('ADMIN_NO_SRP_AUTH', $username, $password);
+
+            if (!$result) {
+                // Authentication failed
+                return response()->json(['message' => 'Authentication failed.'], 401);
+            }
+
+            // Get the tokens from the result
+            $accessToken = $result->get('AuthenticationResult')['AccessToken'];
+            $idToken = $result->get('AuthenticationResult')['IdToken'];
+
+            // Retrieve the user from your local user table
+            $user = User::where('email', $username)->first();
+
+            return response()->json([
+                'message' => 'Login successful.',
+                'access_token' => $accessToken,
+                'id_token' => $idToken,
+                'user' => $user,
+            ]);
+        } catch (CognitoIdentityProviderException $e) {
+            return response()->json(['message' => $e->getAwsErrorMessage()], 401);
+        }
+    }
+
+    public function loginv(Request $request)
     {
         try {
             $request->validate([
