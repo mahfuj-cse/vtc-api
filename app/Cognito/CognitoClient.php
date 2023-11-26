@@ -154,7 +154,7 @@ class CognitoClient
      * @return bool
      * @throws CognitoIdentityProviderException
      */
-    public function loginAdmin($email, $password)
+    public function login($email, $password)
     {
 
         try {
@@ -170,41 +170,6 @@ class CognitoClient
             ]);
             return $response;
         } catch (CognitoIdentityProviderException $exception) {
-            return false;
-        }
-    }
-
-
-
-    public function login(Request $request)
-    {
-        $email = $request->input('email');
-        $password = $request->input('password');
-
-        try {
-            $result = $this->client->initiateAuth([
-                'AuthFlow' => 'USER_PASSWORD_AUTH',
-                'ClientId' => config('services.cognito.client_id'),
-                'AuthParameters' => [
-                    'USERNAME' => $email,
-                    'PASSWORD' => $password,
-                ],
-            ]);
-
-            // Get the tokens from the result
-            $accessToken = $result->get('AuthenticationResult')['AccessToken'];
-            $idToken = $result->get('AuthenticationResult')['IdToken'];
-
-            // Retrieve the user from your local user table
-            $user = User::where('email', $email)->first();
-
-            return [
-                'message' => 'Login successful.',
-                'access_token' => $accessToken,
-                'id_token' => $idToken,
-                'user' => $user,
-            ];
-        } catch (CognitoIdentityProviderException $e) {
             return false;
         }
     }
