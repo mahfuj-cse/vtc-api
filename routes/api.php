@@ -28,5 +28,8 @@ Route::put('/update-user-attributes/{username}', [UserController::class, 'update
 Route::post('/signup', [UserController::class, 'signUp']);
 
 Route::put('/update', [UserController::class, 'getUserByEmail']);
+Route::get('/authenticated-user', [UserController::class, 'getAuthenticatedUser']);
+
+
 
 // Add more routes as needed

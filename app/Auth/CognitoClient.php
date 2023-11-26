@@ -65,63 +65,81 @@ class CognitoClient
 
 	public function authenticate($username, $password)
 	{
-		$auth_parameters = ['USERNAME'	=> $username, 'PASSWORD' => $password];
+		$auth_parameters = ['USERNAME' => $username, 'PASSWORD' => $password];
 		if (!empty($this->appSecret))
 			$auth_parameters['SECRET_HASH'] = $this->hash($username . $this->clientId);
-// dd($this->result);
+
 		try {
 			$this->init_result();
 			$result = $this->client->InitiateAuth([
-				'AuthFlow' 		 => self::USER_PASSWORD_AUTH,
-				'ClientId' 		 => $this->clientId,
-				'UserPoolId'	 => $this->poolId,
+				'AuthFlow'       => self::USER_PASSWORD_AUTH,
+				'ClientId'       => $this->clientId,
+				'UserPoolId'     => $this->poolId,
 				'AuthParameters' => $auth_parameters
 			]);
-// dd($result);
+
 			$this->result->result = true;
 			$this->result->response = $result;
 
-			if ($result->get('ChallengeName') == self::RESPONSE_NEW_PASSWORD_REQUIRED)
+			if ($result->get('ChallengeName') == self::RESPONSE_NEW_PASSWORD_REQUIRED) {
 				$this->result->new_password_required = true;
 
-			if ($result->get('ChallengeName') == self::RESPONSE_NEW_PASSWORD_REQUIRED) {
-				session([
-					'CognitoNeedsReset'  => true,
-					'CognitoSession'	 => $result->get('Session'),
-					'CognitoUsername' 	 => $username
+				return response()->json([
+					'message' => 'New password required',
+					'session' => $result->get('Session')
 				]);
-
-				return true;
 			}
 
-			$this->AccessToken 	= $result->get('AuthenticationResult')['AccessToken'];
-			$this->IdToken 		= $result->get('AuthenticationResult')['IdToken'];
-			$this->RefreshToken	= $result->get('AuthenticationResult')['RefreshToken'];
-
-			session([
-				'CognitoAccessToken'	=> $this->AccessToken,
-				'CognitoIdToken'		=> $this->IdToken,
-				'CognitoRefreshToken'	=> $this->RefreshToken,
-				'CognitoUsername'       => $username,
-				'CognitoExpiry'         => time() + ($result->get('AuthenticationResult')['ExpiresIn'] * 1)
-			]);
+			$this->AccessToken  = $result->get('AuthenticationResult')['AccessToken'];
+			$this->IdToken      = $result->get('AuthenticationResult')['IdToken'];
+			$this->RefreshToken = $result->get('AuthenticationResult')['RefreshToken'];
 
 			$this->result->login_successful = true;
+
 			return response()->json([
-				'token' => $this->AccessToken, // Include the access token in the response
+				'token'   => $this->AccessToken,
 				'message' => 'Authentication successful'
 			]);
+		} catch (\Aws\CognitoIdentityProvider\Exception\CognitoIdentityProviderException $e) {
+			$this->handleAuthException($e);
+		}
+
+		return false;
+	}
+
+	public function refreshToken($RefreshToken, $username)
+	{
+		try {
+			$auth_parameters = ['REFRESH_TOKEN' => $RefreshToken];
+			if (!empty($this->appSecret))
+				$auth_parameters['SECRET_HASH'] = $this->hash($username . $this->clientId);
+
+			$result = $this->client->InitiateAuth([
+				'AuthFlow'       => self::REFRESH_TOKEN_AUTH,
+				'ClientId'       => $this->clientId,
+				'UserPoolId'     => $this->poolId,
+				'AuthParameters' => $auth_parameters
+			]);
+
+			$this->AccessToken  = $result->get('AuthenticationResult')['AccessToken'];
+			$this->IdToken      = $result->get('AuthenticationResult')['IdToken'];
 
 			return true;
 		} catch (\Aws\CognitoIdentityProvider\Exception\CognitoIdentityProviderException $e) {
-
-			$this->error_message = $e->getAwsErrorMessage();
-			$this->error_code    = $e->getAwsErrorCode();
-
-			$this->result->response = $e;
-			$this->result->login_unsuccessful = true;
-			$this->result->message = $e->getAwsErrorMessage();
+			$this->handleAuthException($e);
 		}
+
+		return false;
+	}
+
+	private function handleAuthException(\Aws\CognitoIdentityProvider\Exception\CognitoIdentityProviderException $e)
+	{
+		$this->error_message = $e->getAwsErrorMessage();
+		$this->error_code    = $e->getAwsErrorCode();
+
+		$this->result->response = $e;
+		$this->result->login_unsuccessful = true;
+		$this->result->message = $e->getAwsErrorMessage();
 
 		return false;
 	}
@@ -168,21 +186,21 @@ class CognitoClient
 			$this->result->response = $result->get('Users');
 
 			return true;
-		}catch (\Aws\CognitoIdentityProvider\Exception\CognitoIdentityProviderException $e) {
+		} catch (\Aws\CognitoIdentityProvider\Exception\CognitoIdentityProviderException $e) {
 
 			$this->error_message = $e->getAwsErrorMessage();
 			$this->error_code    = $e->getAwsErrorCode();
-		
+
 			// Log or return the exception details for debugging
 			\Log::error('Cognito ListUsers Exception', [
 				'error_message' => $this->error_message,
 				'error_code'    => $this->error_code,
 				'exception'     => $e
 			]);
-		
+
 			$this->result->result = false;
 			$this->result->message = $this->error_message;
-		
+
 			return false;
 		}
 	}
@@ -197,15 +215,10 @@ class CognitoClient
 
 			// Check if the confirmation was successful
 			if ($result->get('UserConfirmed')) {
-				// User is confirmed, you can proceed with additional actions if needed
-				// For example, update your local user record or log the user in.
+
 				return true;
 			} else {
-				// User is not confirmed. You may need to handle the confirmation process.
-				// This usually involves sending a confirmation code to the user's email.
-				// The confirmation code is required to confirm the user's registration.
-				// You can use $result->get('UserSub') to get the user's unique identifier.
-				// Send the confirmation code to the user through your preferred method (email, SMS, etc.).
+
 				return false;
 			}
 		} catch (\Aws\CognitoIdentityProvider\Exception\CognitoIdentityProviderException $e) {
@@ -213,9 +226,7 @@ class CognitoClient
 			$errorMessage = $e->getAwsErrorMessage();
 			$errorCode = $e->getAwsErrorCode();
 
-			// You may want to throw an exception or return an error response
-			// depending on your application's logic.
-			// Consider checking for specific error codes to handle different scenarios.
+
 			return false;
 		}
 	}
@@ -248,7 +259,7 @@ class CognitoClient
 
 			$result = $this->client->signUp($signUpParams);
 			// $ct = $this->client->adminConfirmSignUp($username);
-             
+
 			// $username = $username; // Replace with the actual username
 			if ($this->client->adminConfirmSignUp($username)) {
 				// User sign-up confirmed successfully
@@ -261,16 +272,10 @@ class CognitoClient
 
 			// Check if the user needs to confirm the registration
 			if ($result->get('UserConfirmed')) {
-				// User is confirmed, you can proceed with additional actions if needed
-				// For example, send a confirmation email, etc.
-				// The user is not signed in automatically after signup. They usually need to confirm their email.
+
 				return true;
 			} else {
-				// User is not confirmed. You may need to handle the confirmation process.
-				// This usually involves sending a confirmation code to the user's email.
-				// The confirmation code is required to confirm the user's registration.
-				// You can use $result->get('UserSub') to get the user's unique identifier.
-				// Send the confirmation code to the user through your preferred method (email, SMS, etc.).
+
 				return false;
 			}
 		} catch (\Aws\Exception\AwsException $e) {
@@ -278,9 +283,6 @@ class CognitoClient
 			$errorMessage = $e->getAwsErrorMessage();
 			$errorCode = $e->getAwsErrorCode();
 
-			// You may want to throw an exception or return an error response
-			// depending on your application's logic.
-			// Consider checking for specific error codes to handle different scenarios.
 			return false;
 		}
 	}
@@ -497,46 +499,5 @@ class CognitoClient
 			return true;
 
 		return false;
-	}
-
-	/*
-   	 *  
-   	 * 
-   	 *  @param str The Refresh token
-   	 *  @param str The username, neccessary for hash secret
-   	 * 
-   	 *  @return bool
-   	 */
-	public function refreshToken($RefreshToken, $username)
-	{
-		try {
-			$auth_parameters = ['REFRESH_TOKEN' => $RefreshToken];
-			if (!empty($this->appSecret))
-				$auth_parameters['SECRET_HASH'] = $this->hash($username . $this->clientId);
-
-			$result = $this->client->InitiateAuth([
-				'AuthFlow' 		 => self::REFRESH_TOKEN_AUTH,
-				'ClientId' 		 => $this->clientId,
-				'UserPoolId'	 => $this->poolId,
-				'AuthParameters' => $auth_parameters
-			]);
-			$this->AccessToken 	= $result->get('AuthenticationResult')['AccessToken'];
-			$this->IdToken 		= $result->get('AuthenticationResult')['IdToken'];
-
-			session([
-				'CognitoAccessToken'	=> $this->AccessToken,
-				'CognitoIdToken'		=> $this->IdToken,
-				'CognitoUsername'       => $username,
-				'CognitoExpiry'         => time() + ($result->get('AuthenticationResult')['ExpiresIn'] * 1)
-			]);
-
-			return true;
-		} catch (\Aws\CognitoIdentityProvider\Exception\CognitoIdentityProviderException $e) {
-
-			$this->error_message = $e->getAwsErrorMessage();
-			$this->error_code    = $e->getAwsErrorCode();
-
-			return false;
-		}
 	}
 }

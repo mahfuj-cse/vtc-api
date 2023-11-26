@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Auth\CognitoClient;
+use Illuminate\Support\Facades\Auth;
 
 class UserController extends Controller
 {
@@ -27,6 +28,10 @@ class UserController extends Controller
 
             if ($result->login_successful) {
                 // Authentication successful
+                // dd(Auth::user());
+                // Auth::login(Auth::user());
+
+
                 return response()->json(['message' => 'Authentication successful']);
             } elseif ($result->new_password_required) {
                 // User needs to reset password
@@ -34,6 +39,26 @@ class UserController extends Controller
             } else {
                 // Authentication unsuccessful
                 return response()->json(['message' => 'Authentication failed'], 401);
+            }
+        } catch (\Exception $e) {
+            // Handle exceptions
+            return response()->json(['message' => $e->getMessage()], 500);
+        }
+    }
+
+    public function getAuthenticatedUser()
+    {
+
+        try {
+            // Retrieve the currently authenticated user
+            $user = Auth::user();
+
+            if ($user) {
+                // User is authenticated
+                return response()->json(['user' => $user]);
+            } else {
+                // No authenticated user found
+                return response()->json(['message' => 'No authenticated user'], 401);
             }
         } catch (\Exception $e) {
             // Handle exceptions
